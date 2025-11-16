@@ -16,16 +16,35 @@ export const calculateUtilsIPs = (networkIP, broadcastIP) => {
   const networkParts = networkIP.split('.').map(Number);
   const broadcastParts = broadcastIP.split('.').map(Number);
   
-  // Convertir IPs a números de 32 bits para facilitar el cálculo
-  const networkNum = (networkParts[0] << 24) + (networkParts[1] << 16) + (networkParts[2] << 8) + networkParts[3];
-  const broadcastNum = (broadcastParts[0] << 24) + (broadcastParts[1] << 16) + (broadcastParts[2] << 8) + broadcastParts[3];
-  
+  // Convertir IPs a números de 32 bits usando aritmética no bitwise
+  // para evitar conversiones a signed 32-bit que producen números negativos
+  const networkNum = networkParts[0] * 16777216 + networkParts[1] * 65536 + networkParts[2] * 256 + networkParts[3];
+  const broadcastNum = broadcastParts[0] * 16777216 + broadcastParts[1] * 65536 + broadcastParts[2] * 256 + broadcastParts[3];
+
   const totalUtilIPs = broadcastNum - networkNum - 1;
-  const firstUtilIP = networkNum + 1;
-  const lastUtilIP = broadcastNum - 1;
+  // Casos especiales:
+  // - Si networkNum === broadcastNum => red /32, una única IP
+  // - Si broadcastNum === networkNum + 1 => red /31, dos IPs (RFC 3021)
+  let firstUtilIP;
+  let lastUtilIP;
+  let usableCount = totalUtilIPs;
+
+  if (broadcastNum === networkNum) {
+    usableCount = 1;
+    firstUtilIP = networkNum;
+    lastUtilIP = networkNum;
+  } else if (broadcastNum === networkNum + 1) {
+    usableCount = 2;
+    firstUtilIP = networkNum;
+    lastUtilIP = broadcastNum;
+  } else {
+    usableCount = broadcastNum - networkNum - 1;
+    firstUtilIP = networkNum + 1;
+    lastUtilIP = broadcastNum - 1;
+  }
   
   return {
-    totalCount: totalUtilIPs,
+    totalCount: usableCount,
     firstIPNum: firstUtilIP,
     lastIPNum: lastUtilIP,
     firstIP: `${(firstUtilIP >>> 24) & 255}.${(firstUtilIP >>> 16) & 255}.${(firstUtilIP >>> 8) & 255}.${firstUtilIP & 255}`,
@@ -36,7 +55,7 @@ export const calculateUtilsIPs = (networkIP, broadcastIP) => {
 
 // Función auxiliar para generar una IP específica por índice
 export const generateIPByIndex = (firstIPNum, index) => {
-  const ipNum = firstIPNum + index;
+  const ipNum = (firstIPNum + index) >>> 0; // asegurar entero sin signo de 32 bits
   return `${(ipNum >>> 24) & 255}.${(ipNum >>> 16) & 255}.${(ipNum >>> 8) & 255}.${ipNum & 255}`;
 }
 
